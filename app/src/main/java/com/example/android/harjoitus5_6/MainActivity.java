@@ -1,12 +1,17 @@
 package com.example.android.harjoitus5_6;
 
 import android.content.ContentValues;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.example.android.harjoitus5_6.data.DatabaseContract;
 import com.example.android.harjoitus5_6.data.TrainingDbHelper;
@@ -22,6 +27,9 @@ public class MainActivity extends AppCompatActivity {
     private EditText mRpe;
     private EditText mSharpness;
 
+    private RecyclerView mRecyclerView;
+    private TrainingAdapter mTrainingAdapter;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -33,8 +41,42 @@ public class MainActivity extends AppCompatActivity {
         mRpe = (EditText) findViewById(R.id.et_rpe);
         mSharpness = (EditText) findViewById(R.id.et_sharpness);
 
+        mRecyclerView = (RecyclerView) findViewById(R.id.all_entries_list_view);
+
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        mRecyclerView.setLayoutManager(layoutManager);
+        mRecyclerView.setHasFixedSize(true);
+
         TrainingDbHelper dbHelper = new TrainingDbHelper(this);
         mDb = dbHelper.getWritableDatabase();
+
+        Cursor cursor = getAllEntries();
+        mTrainingAdapter = new TrainingAdapter(this, cursor);
+        mRecyclerView.setAdapter(mTrainingAdapter);
+
+        new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(RecyclerView.ViewHolder viewHolder, int direction) {
+                long id = (long) viewHolder.itemView.getTag();
+                deleteEntry(id);
+                mTrainingAdapter.swapCursor(getAllEntries());
+            }
+        }).attachToRecyclerView(mRecyclerView);
+    }
+
+    private Cursor getAllEntries(){
+        return mDb.query(DatabaseContract.TrainingEntry.TABLE_NAME,
+                null,
+                null,
+                null,
+                null,
+                null,
+                DatabaseContract.TrainingEntry.COLUMN_DATE);
     }
 
     public void addNewEntry(View view) {
@@ -59,12 +101,16 @@ public class MainActivity extends AppCompatActivity {
             // Validate input values
             if (durationMinutes > 0 && rpe > 0 && rpe <= 10 && sharpness > 0 && sharpness <= 10) {
                 createNewEntry(mDate.getText().toString(), durationMinutes, rpe, sharpness, mSport.getText().toString());
+                Toast toast = Toast.makeText(this, R.string.entry_created, Toast.LENGTH_LONG);
+                toast.show();
             } else {
                 // Give error message about inputs
             }
         } catch (Exception ex) {
             Log.e("error", ex.getMessage());
         }
+
+        mTrainingAdapter.swapCursor(getAllEntries());
     }
 
     private long createNewEntry(String date, int duration, int rpe, int sharpness, String sport) {
